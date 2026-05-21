@@ -14,3 +14,21 @@
 .animate-slide-down {
   animation: slide-down 0.3s ease-out;
 }
+
+@keyframes fault-blink {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.75; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 6px currentColor; }
+  50% { box-shadow: 0 0 16px currentColor, 0 0 24px currentColor; }
+}
+
+.traffic-light-active {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.traffic-light-fault {
+  animation: fault-blink 0.8s ease-in-out infinite;
+}

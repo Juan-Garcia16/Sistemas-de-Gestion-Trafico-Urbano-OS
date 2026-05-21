@@ -63,3 +63,54 @@ class TrafficScheduler:
         if event:
             event.wait()
             event.clear()
+
+    def remove_vehicle(self, vehicle_id: str):
+        """
+        Remueve un vehículo de todas las colas de recursos.
+        Usado para rollback cuando se detecta un deadlock.
+        """
+        with self._lock:
+            self._dispatch_events.pop(vehicle_id, None)
+            for inter_id in list(self._queues.keys()):
+                q = self._queues[inter_id]
+                remaining = []
+                while not q.empty():
+                    try:
+                        item = q.get_nowait()
+                        if item[2].vehicle_id != vehicle_id:
+                            remaining.append(item)
+                    except queue.Empty:
+                        break
+                for item in remaining:
+                    q.put(item)
+
+    def get_queue_sizes(self) -> dict:
+        """
+        Devuelve el tamaño de la cola de espera por cada intersección.
+        Usado por el panel de métricas SO en el frontend.
+        """
+        with self._lock:
+            sizes = {}
+            for inter_id in self._queues:
+                sizes[inter_id] = self._queues[inter_id].qsize()
+            return sizes
+
+    def get_queued_vehicles(self, intersection_id: str) -> list:
+        """
+        Devuelve los IDs de vehículos en cola para una intersección específica.
+        Inspecciona la PriorityQueue sin modificarla (drena y reconstruye).
+        """
+        with self._lock:
+            if intersection_id not in self._queues:
+                return []
+            q = self._queues[intersection_id]
+            items = []
+            while not q.empty():
+                try:
+                    items.append(q.get_nowait())
+                except queue.Empty:
+                    break
+            # Re-encolar todo (inspección no destructiva)
+            for item in items:
+                q.put(item)
+            return [item[2].vehicle_id for item in items]

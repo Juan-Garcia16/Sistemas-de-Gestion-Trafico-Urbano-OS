@@ -4,6 +4,14 @@
 
 ### Arquitectura del Proyecto — Sistemas Operativos
 
+**Estado actual:** [x] Backend completo [x] Frontend completo [x] Integración end-to-end
+
+**Stack tecnológico:**
+- **Backend:** Python 3.12 — FastAPI + threading + asyncio
+- **Frontend:** React 19 + Vite 8 + Tailwind v4
+- **Persistencia:** SQLite con SQLAlchemy
+- **Comunicación:** WebSockets nativos + API REST con JWT
+
 ---
 
 ## 1. Visión General
@@ -390,38 +398,43 @@ CREATE TABLE light_config (
 
 ## 6. API REST — Endpoints
 
-| Método | Ruta                          | Rol requerido | Descripción                                |
-| ------ | ----------------------------- | ------------- | ------------------------------------------ |
-| `POST` | `/auth/login`                 | —             | Login, retorna JWT                         |
-| `POST` | `/auth/register`              | —             | Registro de usuario                        |
-| `POST` | `/simulation/start`           | `control`     | Inicia la simulación                       |
-| `POST` | `/simulation/stop`            | `control`     | Detiene la simulación                      |
-| `GET`  | `/simulation/status`          | `viewer`      | Estado actual del sistema                  |
-| `POST` | `/simulation/vehicle`         | `control`     | Agregar vehículo (tipo: emergencia/normal) |
-| `PUT`  | `/control/lights/{id}/timing` | `control`     | Modificar tiempos de semáforo              |
-| `POST` | `/control/lights/{id}/fault`  | `control`     | Simular fallo manualmente                  |
-| `GET`  | `/logs`                       | `control`     | Historial de eventos                       |
-| `WS`   | `/ws`                         | —             | Stream de estado en tiempo real            |
+| Método | Ruta                           | Rol requerido | Descripción                                     |
+| ------ | ------------------------------ | ------------- | ----------------------------------------------- |
+| `POST` | `/auth/login`                  | —             | Login, retorna JWT                              |
+| `POST` | `/auth/register`               | —             | Registro de usuario                             |
+| `POST` | `/simulation/start`            | `control`     | Inicia la simulación (grid 3×3 + FaultHandler + DeadlockDetector) |
+| `POST` | `/simulation/stop`             | `control`     | Detiene la simulación                           |
+| `GET`  | `/simulation/status`           | `viewer`      | Estado actual: intersecciones, vehículos, posiciones |
+| `GET`  | `/simulation/metrics`          | `viewer`      | Métricas SO: mutex, colas, tiempos de espera    |
+| `POST` | `/simulation/vehicle`          | `control`     | Agregar vehículo manualmente                    |
+| `POST` | `/simulation/scenario`         | `control`     | Ejecutar demo: mutex_demo, priority_demo, deadlock_demo |
+| `PUT`  | `/control/lights/{id}/timing`  | `control`     | Modificar green_time y red_time del semáforo    |
+| `POST` | `/control/lights/{id}/fault`   | `control`     | Simular fallo manual en semáforo                |
+| `GET`  | `/control/logs`                | `control`     | Historial de eventos (FAULT, DEADLOCK, CONFIG_CHANGE) |
+| `WS`   | `/ws`                          | —             | Stream en tiempo real: STATE_UPDATE, FAULT, RESTORE, DEADLOCK |
 
 ---
 
-## 7. Flujo Principal de la Simulación
+## 7. Flujo de Demo para Sustentación
 
 ```
-1. Usuario "control" inicia simulación → POST /simulation/start
-2. Engine crea N intersecciones como nodos del grafo
-3. FaultHandler arranca en thread separado
-4. Scheduler arranca su loop de despacho
-5. Cada vehículo nuevo → nuevo Thread (Vehicle.run())
-6. Vehicle entra a scheduler.enqueue(vehicle, intersection_id)
-7. Scheduler evalúa PriorityQueue → despacha según prioridad
-8. Vehicle.acquire() toma el semáforo de la intersección
-9. Vehicle cruza → release() → siguiente intersección
-10. En cada tick → Engine hace broadcast() vía WebSocket
-11. FaultHandler dispara evento aleatorio → semáforo pasa a FAULT
-12. Intersecciones vecinas reciben alerta → frontend muestra banner
-13. Auto-recuperación a los 5s → semáforo vuelve a RED
-14. Todo queda registrado en event_log (SQLite)
+1. Login → "Sistema con control de acceso basado en roles (viewer/control)"
+2. Iniciar simulación → grid 3×3 con semáforos de 3 luces, calles y marcas viales
+3. Panel de Métricas SO muestra: 🔒 mutex (libre/ocupado), colas, tiempos de espera
+
+4. [Botón "Demo: Exclusión Mutua"] → 3 autos compiten por misma intersección
+   → Solo 1 cruza, los otros esperan → 🔒 en el grid + métricas: mutex TOMADO
+
+5. [Botón "Demo: Prioridad"] → 1 🚑 ambulancia + 2 autos normales
+   → Ambulancia (P0) despachada primero pese a llegar después → Priority Scheduling
+
+6. [Botón "Demo: Deadlock"] → 2 vehículos con rutas que se cruzan
+   → A los 10s el DeadlockDetector detecta → rollback → broadcast DEADLOCK
+
+7. Fallos automáticos → cada 15-30s un semáforo falla (FAULT)
+   → Overlay rojo pulsante + AlertBanner → auto-recuperación a los 5s
+
+8. Panel de control → modificar green_time/red_time en tiempo real
 ```
 
 ---

@@ -8,11 +8,12 @@ class TrafficLight:
     (hilos/procesos) intentan acceder de forma concurrente, garantizando el aislamiento
     y previniendo inconsistencias de estado.
     """
-    def __init__(self, intersection_id: str, green_time: int = 10):
+    def __init__(self, intersection_id: str, green_time: int = 10, red_time: int = 10):
         self.id = intersection_id
         # Estados posibles: RED | GREEN | YELLOW | FAULT
         self.state = "RED"
         self.green_time = green_time
+        self.red_time = red_time  # Duración independiente de la fase roja del semáforo
         
         # --- Concepto de SO: Semáforo Mutex ---
         # Un Semáforo inicializado en 1 actúa como una cerradura de exclusión mutua (Mutex).

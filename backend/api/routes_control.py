@@ -45,6 +45,7 @@ def update_timing(
 
     # Actualizar tiempos del semáforo
     intersection.light.green_time = green_time
+    intersection.light.red_time = red_time
 
     # Guardar o actualizar en DB
     config = db.query(LightConfig).filter(LightConfig.intersection_id == intersection_id).first()

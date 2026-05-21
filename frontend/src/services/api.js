@@ -99,6 +99,16 @@ class ApiService {
     if (limit) params.append("limit", limit);
     return this.request("GET", `/logs?${params.toString()}`);
   }
+
+  // Demo scenarios
+  async runScenario(scenario) {
+    return this.request("POST", "/simulation/scenario", { scenario });
+  }
+
+  // Metrics
+  async getMetrics() {
+    return this.request("GET", "/simulation/metrics");
+  }
 }
 
 export const api = new ApiService();

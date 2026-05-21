@@ -76,8 +76,8 @@ class SimulationEngine:
                     timer = self._light_timers[inter.id]
 
                     # Máquina de estados cíclica: RED -> GREEN -> YELLOW -> RED
-                    # Asumimos que rojo dura lo mismo que el tiempo en verde por simplicidad didáctica
-                    current_red_time = light.green_time
+                    # Usa red_time independiente del semáforo
+                    current_red_time = light.red_time
 
                     if light.state == "RED" and timer >= current_red_time:
                         light.state = "GREEN"
@@ -130,26 +130,55 @@ class SimulationEngine:
         vehicle = Vehicle(vehicle_id, route, priority, self.scheduler)
         self.active_vehicles[vehicle_id] = vehicle
         vehicle.start()
+        vehicle._arrival_tick = self._tick_count
 
     def state_snapshot(self) -> dict:
-        """
-        Punto de inspección para extraer estadísticas del sistema operante en un corte temporal.
-        Equivalente a consultar el sistema de archivos virtual dinámico nativo, como /proc en UNIX.
-        """
+        def _coords(inter_id: str) -> dict:
+            parts = inter_id.split("_")
+            return {"x": int(parts[1]), "y": int(parts[2])}
+
+        # Obtener info de colas del scheduler (thread-safe)
+        queue_sizes = self.scheduler.get_queue_sizes() if hasattr(self.scheduler, 'get_queue_sizes') else {}
+        queue_vehicles = {}
+        for inter in self.network.get_all():
+            if hasattr(self.scheduler, 'get_queued_vehicles'):
+                queue_vehicles[inter.id] = self.scheduler.get_queued_vehicles(inter.id)
+            else:
+                queue_vehicles[inter.id] = []
+
         intersections_state = []
         for inter in self.network.get_all():
+            # Buscar vehículo MOVING en esta intersección (dueño del mutex)
+            mutex_owner = None
+            for v_id, v in self.active_vehicles.items():
+                if v.status == "MOVING":
+                    current_inter = v.route[v.current_position - 1] if v.current_position > 0 and v.current_position - 1 < len(v.route) else (v.route[0] if v.route else None)
+                    if current_inter == inter.id:
+                        mutex_owner = v_id
+                        break
+
             intersections_state.append({
                 "id": inter.id,
-                "state": inter.light.state
+                "state": inter.light.state,
+                "position": _coords(inter.id),
+                "queue_size": queue_sizes.get(inter.id, 0),
+                "queued_vehicles": queue_vehicles.get(inter.id, []),
+                "mutex_owner": mutex_owner,
+                "mutex_locked": mutex_owner is not None
             })
 
         vehicles_state = []
-        # Eliminamos limpieza profunda por ahora, mostramos tanto los WAIT como los DONE.
         for v_id, v in list(self.active_vehicles.items()):
+            current_inter_id = v.route[v.current_position] if v.current_position < len(v.route) else v.route[-1] if v.route else "unknown"
             vehicles_state.append({
                 "id": v.vehicle_id,
                 "status": v.status,
-                "position": v.current_position
+                "position": v.current_position,
+                "route": v.route,
+                "priority": v.priority.name,
+                "current_intersection": current_inter_id,
+                "currentPosition": _coords(current_inter_id),
+                "wait_time_ticks": max(0, self._tick_count - getattr(v, '_arrival_tick', self._tick_count))
             })
 
         return {
