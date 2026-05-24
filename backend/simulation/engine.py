@@ -37,6 +37,7 @@ class SimulationEngine:
 
         # Contador de ticks
         self._tick_count = 0
+        self._vehicle_counter = 0
 
     def start(self):
         """
@@ -89,13 +90,16 @@ class SimulationEngine:
                         # procesar inmediatamente la "Ready Queue" y despachar al vehículo ganador.
                         self.scheduler.dispatch_next(inter.id)
 
+                    elif light.state == "YELLOW" and timer >= TRAFFIC_LIGHT_YELLOW_DURATION:
+                        light.state = "RED"
+                        self._light_timers[inter.id] = 0
+
                     elif light.state == "GREEN" and timer >= light.green_time:
                         light.state = "YELLOW"
                         self._light_timers[inter.id] = 0
 
-                    elif light.state == "YELLOW" and timer >= TRAFFIC_LIGHT_YELLOW_DURATION:
-                        light.state = "RED"
-                        self._light_timers[inter.id] = 0
+                    elif light.state == "GREEN":
+                        self.scheduler.dispatch_next(inter.id)
 
             # --- Broadcast del estado a través de WebSocket ---
             if self._broadcast_func:
@@ -169,7 +173,11 @@ class SimulationEngine:
             })
 
         vehicles_state = []
+        done_vehicles = []
         for v_id, v in list(self.active_vehicles.items()):
+            if v.status == "DONE":
+                done_vehicles.append(v_id)
+                continue
             current_inter_id = v.route[v.current_position] if v.current_position < len(v.route) else v.route[-1] if v.route else "unknown"
             vehicles_state.append({
                 "id": v.vehicle_id,
@@ -187,3 +195,6 @@ class SimulationEngine:
             "vehicles": vehicles_state,
             "tick": self._tick_count
         }
+
+        for v_id in done_vehicles:
+            self.active_vehicles.pop(v_id, None)
