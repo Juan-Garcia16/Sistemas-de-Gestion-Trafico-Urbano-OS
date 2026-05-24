@@ -1,5 +1,6 @@
 import threading
 import time
+from config import TRAFFIC_LIGHT_YELLOW_DURATION
 from simulation.network import IntersectionNetwork
 from core.scheduler import TrafficScheduler
 from core.vehicle import Vehicle, Priority
@@ -92,7 +93,7 @@ class SimulationEngine:
                         light.state = "YELLOW"
                         self._light_timers[inter.id] = 0
 
-                    elif light.state == "YELLOW" and timer >= 3: # 3s de transición amarilla
+                    elif light.state == "YELLOW" and timer >= TRAFFIC_LIGHT_YELLOW_DURATION:
                         light.state = "RED"
                         self._light_timers[inter.id] = 0
 

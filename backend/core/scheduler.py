@@ -37,7 +37,7 @@ class TrafficScheduler:
         # En sistemas operativos, si dos procesos tienen igual prioridad, se recurre 
         # a FIFO / Round Robin temporal. Aquí incluimos time.time() para evitar choques
         # en la PriorityQueue si hay prioridades empatadas, respetando el orden de llegada.
-        entry = (vehicle.priority, time.time(), vehicle)
+        entry = (vehicle.priority, time.time(), id(vehicle), vehicle)
         self._queues[intersection_id].put(entry)
 
     def dispatch_next(self, intersection_id: str):
@@ -48,7 +48,7 @@ class TrafficScheduler:
         if intersection_id in self._queues:
             try:
                 # get_nowait extrae al proceso siempre priorizando el de menor valor IntEnum.
-                _, _, vehicle = self._queues[intersection_id].get_nowait()
+                _, _, _, vehicle = self._queues[intersection_id].get_nowait()
                 # Envía la señal (interrupción de software) para despertar al Vehículo
                 self._dispatch_events[vehicle.vehicle_id].set()
             except queue.Empty:
@@ -77,7 +77,7 @@ class TrafficScheduler:
                 while not q.empty():
                     try:
                         item = q.get_nowait()
-                        if item[2].vehicle_id != vehicle_id:
+                        if item[3].vehicle_id != vehicle_id:
                             remaining.append(item)
                     except queue.Empty:
                         break
@@ -113,4 +113,4 @@ class TrafficScheduler:
             # Re-encolar todo (inspección no destructiva)
             for item in items:
                 q.put(item)
-            return [item[2].vehicle_id for item in items]
+            return [item[3].vehicle_id for item in items]

@@ -24,9 +24,9 @@ class Settings(BaseModel):
     FAULT_RECOVERY_TIME: int = 5
 
     # Semáforos
-    TRAFFIC_LIGHT_DEFAULT_GREEN: int = 10
-    TRAFFIC_LIGHT_DEFAULT_RED: int = 10
-    TRAFFIC_LIGHT_YELLOW_DURATION: int = 3
+    TRAFFIC_LIGHT_DEFAULT_GREEN: int = 5
+    TRAFFIC_LIGHT_DEFAULT_RED: int = 5
+    TRAFFIC_LIGHT_YELLOW_DURATION: int = 1
 
     # API
     API_HOST: str = "0.0.0.0"

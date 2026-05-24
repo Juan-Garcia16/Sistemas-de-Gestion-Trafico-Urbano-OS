@@ -1,3 +1,4 @@
+from config import TRAFFIC_LIGHT_DEFAULT_GREEN, TRAFFIC_LIGHT_DEFAULT_RED
 from core.intersection import Intersection
 
 class IntersectionNetwork:
@@ -21,10 +22,10 @@ class IntersectionNetwork:
         # Lista de adyacencia de la red de recursos
         self.adjacency_list: dict[str, list[str]] = {}
 
-    def add_intersection(self, intersection_id: str):
+    def add_intersection(self, intersection_id: str, green_time: int = TRAFFIC_LIGHT_DEFAULT_GREEN, red_time: int = TRAFFIC_LIGHT_DEFAULT_RED):
         """Inicializa un nuevo recurso en el grafo del sistema."""
         if intersection_id not in self.nodes:
-            self.nodes[intersection_id] = Intersection(intersection_id)
+            self.nodes[intersection_id] = Intersection(intersection_id, green_time, red_time)
             self.adjacency_list[intersection_id] = []
 
     def connect(self, id1: str, id2: str, bidirectional: bool = True):

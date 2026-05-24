@@ -7,6 +7,8 @@ from auth.roles import require_role, require_any_role
 from core.vehicle import Priority
 from simulation.engine import SimulationEngine
 from simulation.network import IntersectionNetwork
+from config import TRAFFIC_LIGHT_DEFAULT_GREEN, TRAFFIC_LIGHT_DEFAULT_RED
+from core.intersection import Intersection
 from core.scheduler import TrafficScheduler
 from api.websocket import manager
 from core.fault_handler import FaultHandler
@@ -94,15 +96,6 @@ def start_simulation(user=Depends(require_role("control"))):
 
     def on_fault(intersection_id: str):
         timestamp = datetime.utcnow().isoformat()
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(broadcast_event({
-            "type": "FAULT",
-            "intersection_id": intersection_id,
-            "timestamp": timestamp
-        }))
-        loop.close()
         db = SessionLocal()
         try:
             log = EventLog(timestamp=timestamp, event_type="FAULT", intersection_id=intersection_id, details='{"source": "fault_handler"}')
@@ -112,16 +105,7 @@ def start_simulation(user=Depends(require_role("control"))):
             db.close()
 
     def on_restore(intersection_id: str):
-        timestamp = datetime.utcnow().isoformat()
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(broadcast_event({
-            "type": "RESTORE",
-            "intersection_id": intersection_id,
-            "timestamp": timestamp
-        }))
-        loop.close()
+        pass
 
     _fault_handler = FaultHandler(_network, on_fault, on_restore)
     _fault_handler.start()
