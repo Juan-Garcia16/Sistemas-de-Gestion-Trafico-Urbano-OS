@@ -36,6 +36,7 @@ class Vehicle(threading.Thread):
         self._dispatched_at_tick: int = -1
         self._dispatch_seq: int = 0
         self._held_light: str | None = None
+        self._waiting_for_fault_clear: bool = False
 
     def run(self):
         """
@@ -43,9 +44,19 @@ class Vehicle(threading.Thread):
         El vehículo camina aleatoriamente por la red hasta alcanzar su lifetime máximo.
         """
         while self._visited_count < _MAX_LIFETIME:
-            if self._held_light is not None and self._held_light != self.current_intersection:
-                old_light = self.network.nodes[self._held_light].light
-                old_light.release()
+            if self._waiting_for_fault_clear and self.queued_at:
+                dest_light = self.network.nodes[self.queued_at].light
+                if dest_light.state == "FAULT":
+                    print(f"[FAULT_WAIT] {self.vehicle_id} still waiting for {self.queued_at} to clear fault")
+                    self.scheduler.enqueue(self, self.queued_at)
+                    time.sleep(0.05)
+                    continue
+                print(f"[FAULT_CLEAR] {self.vehicle_id} detected fault cleared at {self.queued_at}")
+                self._waiting_for_fault_clear = False
+
+            if self._held_light is not None:
+                print(f"[RELEASE] {self.vehicle_id} releasing held light {self._held_light}")
+                self.network.nodes[self._held_light].light.release()
                 self._held_light = None
 
             neighbors = self.network.get_neighbors(self.current_intersection)
@@ -63,15 +74,27 @@ class Vehicle(threading.Thread):
             self.scheduler.wait_for_dispatch(self.vehicle_id)
 
             dest_light = self.network.nodes[next_id].light
+            print(f"[DISPATCH] {self.vehicle_id} dispatched to {next_id}")
             acquired = dest_light.acquire(self.vehicle_id, timeout=5.0)
 
             if not acquired:
+                if dest_light.state == "FAULT":
+                    print(f"[ACQUIRE_FAIL] {self.vehicle_id} failed to acquire {next_id} (FAULT) - waiting for restore")
+                    self.status = "WAITING"
+                    self._dispatched_this_tick = False
+                    self._waiting_for_fault_clear = True
+                    self.queued_at = next_id
+                    self.scheduler.enqueue(self, next_id)
+                    time.sleep(0.05)
+                    continue
+                print(f"[ACQUIRE_FAIL] {self.vehicle_id} failed to acquire {next_id} - re-enqueuing at {self.current_intersection}")
                 self.status = "WAITING"
                 self._dispatched_this_tick = False
                 self.queued_at = self.current_intersection
                 self.scheduler.enqueue(self, self.current_intersection)
-                self.scheduler.wait_for_dispatch(self.vehicle_id)
                 continue
+
+            print(f"[ACQUIRE_OK] {self.vehicle_id} acquired {next_id}")
 
             self._held_light = next_id
 
@@ -98,6 +121,7 @@ class Vehicle(threading.Thread):
             self.current_intersection = next_id
             self._visited_count += 1
             self._dispatched_this_tick = True
+            print(f"[MOVE] {self.vehicle_id}: {prev_inter} -> {next_id} (tick {self.scheduler._current_tick}, seq {self._dispatch_seq})")
             log_vehicle_move(self.vehicle_id, prev_inter, next_id, self._dispatched_at_tick, self._dispatch_seq)
 
         if self._held_light is not None:

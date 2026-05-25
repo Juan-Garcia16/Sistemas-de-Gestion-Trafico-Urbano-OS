@@ -75,11 +75,12 @@ class TrafficScheduler:
         """
         if intersection_id in self._queues:
             try:
-                # get_nowait extrae al proceso siempre priorizando el de menor valor IntEnum.
-                _, _, _, vehicle = self._queues[intersection_id].get_nowait()
+                entry = self._queues[intersection_id].get_nowait()
+                priority, timestamp, vid, vehicle = entry
 
-                # Bug 3: Verificar que el vehículo no fue despachado ya este tick
-                if vehicle.vehicle_id in self._dispatched_this_tick or getattr(vehicle, '_dispatched_this_tick', False):
+                if vehicle.vehicle_id in self._dispatched_this_tick:
+                    print(f"[SCHEDULER] {vehicle.vehicle_id} already dispatched this tick - re-enqueuing at {intersection_id}")
+                    self.enqueue(vehicle, intersection_id)
                     return
 
                 self._dispatched_this_tick.add(vehicle.vehicle_id)

@@ -59,8 +59,9 @@ class TrafficLight:
             self._was_faulty = False
         
         if was_faulty:
-            self._force_release_event.wait(timeout=10.0)
-            self._force_release_event.clear()
+            # Si el recurso fue restaurado tras un fallo, restore() ya liberó el semáforo.
+            # Retornamos de inmediato para evitar liberar por duplicado.
+            return
         
         try:
             self.semaphore.release()
@@ -73,29 +74,24 @@ class TrafficLight:
         """
         with self._lock:
             self.state = "FAULT"
+            self._was_faulty = True
         
         self.fault_event.set()
         self._force_release_event.set()
 
     def restore(self):
-        """
-        Rutina de servicio de interrupción (ISR - Interrupt Service Routine) 
-        para reanudar la operativa normal.
-        """
         with self._lock:
-            self.state = "RED"
+            self.state = "GREEN"
             self._was_faulty = True
-            self._fault_blocked.clear()
+            self._occupied_by = None
         
         self.fault_event.clear()
         self._force_release_event.clear()
         
-        if self._occupied_by is not None:
-            self._occupied_by = None
-            try:
-                self.semaphore.release()
-            except ValueError:
-                pass
+        try:
+            self.semaphore.release()
+        except ValueError:
+            pass
 
     def get_blocked_vehicles(self) -> list:
         """Retorna la lista de vehículos bloqueados tratando de adquirir durante FAULT."""

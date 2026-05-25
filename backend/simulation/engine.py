@@ -1,6 +1,7 @@
 import threading
 import time
 import random
+import queue as queue_module
 from config import TRAFFIC_LIGHT_YELLOW_DURATION, VEHICLE_SPAWN_INTERVAL, VEHICLE_MAX_FLEET, VEHICLE_MAX_LIFETIME, MAX_DISPATCH_PER_INTERSECTION_PER_TICK
 from simulation.network import IntersectionNetwork
 from core.scheduler import TrafficScheduler
@@ -80,6 +81,12 @@ class SimulationEngine:
 
                 with light._lock:
                     if light.state == "FAULT":
+                        q = self.scheduler._queues.get(inter.id)
+                        q_size = q.qsize() if q else 0
+                        print(f"[TICK {self._tick_count}] {inter.id} FAULT - {q_size} queued - waking blocked")
+                        dispatched_this_tick.add(inter.id)
+                        if q_size > 0:
+                            self.scheduler.dispatch_next(inter.id)
                         continue
 
                     self._light_timers[inter.id] += 1
@@ -91,8 +98,14 @@ class SimulationEngine:
                         light.state = "GREEN"
                         self._light_timers[inter.id] = 0
                         if inter.id not in dispatched_this_tick:
+                            q = self.scheduler._queues.get(inter.id)
+                            q_size = q.qsize() if q else 0
+                            print(f"[TICK {self._tick_count}] {inter.id} GREEN - {q_size} queued - dispatching all")
                             self.scheduler.dispatch_next(inter.id)
                             dispatched_this_tick.add(inter.id)
+                            if q_size > 1:
+                                for _ in range(q_size - 1):
+                                    self.scheduler.dispatch_next(inter.id)
 
                     elif light.state == "YELLOW" and timer >= TRAFFIC_LIGHT_YELLOW_DURATION:
                         light.state = "RED"
@@ -103,8 +116,14 @@ class SimulationEngine:
                         self._light_timers[inter.id] = 0
 
                     elif light.state == "GREEN" and inter.id not in dispatched_this_tick:
+                        q = self.scheduler._queues.get(inter.id)
+                        q_size = q.qsize() if q else 0
+                        print(f"[TICK {self._tick_count}] {inter.id} GREEN - {q_size} queued - dispatching all")
                         self.scheduler.dispatch_next(inter.id)
                         dispatched_this_tick.add(inter.id)
+                        if q_size > 1:
+                            for _ in range(q_size - 1):
+                                self.scheduler.dispatch_next(inter.id)
 
             self._spawn_timer += 1
             if self._spawn_timer >= self._spawn_interval:

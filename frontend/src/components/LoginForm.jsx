@@ -60,7 +60,7 @@ export function LoginForm({ onLogin }) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium transition disabled:opacity-50"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-medium transition disabled:opacity-50 cursor-pointer"
         >
           {loading ? "Iniciando..." : "Iniciar Sesión"}
         </button>
