@@ -62,11 +62,11 @@ class TrafficScheduler:
             if vehicle.vehicle_id not in self._dispatch_events:
                 self._dispatch_events[vehicle.vehicle_id] = threading.Event()
 
-        # En sistemas operativos, si dos procesos tienen igual prioridad, se recurre 
-        # a FIFO / Round Robin temporal. Aquí incluimos time.time() para evitar choques
-        # en la PriorityQueue si hay prioridades empatadas, respetando el orden de llegada.
         entry = (vehicle.priority, time.time(), id(vehicle), vehicle)
         self._queues[intersection_id].put(entry)
+
+        if hasattr(self, '_deadlock_detector') and self._deadlock_detector:
+            self._deadlock_detector.register_vehicle(vehicle.vehicle_id)
 
     def dispatch_next(self, intersection_id: str):
         """
@@ -79,7 +79,7 @@ class TrafficScheduler:
                 priority, timestamp, vid, vehicle = entry
 
                 if vehicle.vehicle_id in self._dispatched_this_tick:
-                    print(f"[SCHEDULER] {vehicle.vehicle_id} already dispatched this tick - re-enqueuing at {intersection_id}")
+                    
                     self.enqueue(vehicle, intersection_id)
                     return
 
@@ -87,6 +87,9 @@ class TrafficScheduler:
                 self._dispatch_seq += 1
                 vehicle._dispatched_at_tick = self._current_tick
                 vehicle._dispatch_seq = self._dispatch_seq
+
+                if hasattr(self, '_deadlock_detector') and self._deadlock_detector:
+                    self._deadlock_detector.unregister_vehicle(vehicle.vehicle_id)
 
                 self._dispatch_events[vehicle.vehicle_id].set()
             except queue.Empty:

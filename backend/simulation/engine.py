@@ -83,7 +83,7 @@ class SimulationEngine:
                     if light.state == "FAULT":
                         q = self.scheduler._queues.get(inter.id)
                         q_size = q.qsize() if q else 0
-                        print(f"[TICK {self._tick_count}] {inter.id} FAULT - {q_size} queued - waking blocked")
+                        
                         dispatched_this_tick.add(inter.id)
                         if q_size > 0:
                             self.scheduler.dispatch_next(inter.id)
@@ -100,7 +100,7 @@ class SimulationEngine:
                         if inter.id not in dispatched_this_tick:
                             q = self.scheduler._queues.get(inter.id)
                             q_size = q.qsize() if q else 0
-                            print(f"[TICK {self._tick_count}] {inter.id} GREEN - {q_size} queued - dispatching all")
+                            
                             self.scheduler.dispatch_next(inter.id)
                             dispatched_this_tick.add(inter.id)
                             if q_size > 1:
@@ -118,7 +118,7 @@ class SimulationEngine:
                     elif light.state == "GREEN" and inter.id not in dispatched_this_tick:
                         q = self.scheduler._queues.get(inter.id)
                         q_size = q.qsize() if q else 0
-                        print(f"[TICK {self._tick_count}] {inter.id} GREEN - {q_size} queued - dispatching all")
+                        
                         self.scheduler.dispatch_next(inter.id)
                         dispatched_this_tick.add(inter.id)
                         if q_size > 1:
@@ -150,8 +150,8 @@ class SimulationEngine:
 
             time.sleep(1.0)
 
-    def add_vehicle(self, vehicle_id: str, start_intersection: str, priority: Priority):
-        vehicle = Vehicle(vehicle_id, start_intersection, self.network, priority, self.scheduler)
+    def add_vehicle(self, vehicle_id: str, start_intersection: str, priority: Priority, route_path: list[str] | None = None):
+        vehicle = Vehicle(vehicle_id, start_intersection, self.network, priority, self.scheduler, route_path)
         self.active_vehicles[vehicle_id] = vehicle
         vehicle.start()
 
@@ -200,7 +200,8 @@ class SimulationEngine:
                 "position": _coords(v.current_intersection),
                 "priority": v.priority.name,
                 "current_intersection": v.current_intersection,
-                "visited": getattr(v, '_visited_count', 0)
+                "visited": getattr(v, '_visited_count', 0),
+                "route": getattr(v, 'route_path', None)
             })
 
         for v_id in done_vehicles:

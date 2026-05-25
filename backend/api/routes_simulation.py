@@ -37,6 +37,7 @@ class AddVehicleRequest(BaseModel):
     id: str
     start_intersection: str
     priority: str
+    route_path: list[str] | None = None
 
 
 class ScenarioRequest(BaseModel):
@@ -135,6 +136,7 @@ def start_simulation(user=Depends(require_role("control"))):
 
     _deadlock_detector = DeadlockDetector(_scheduler, on_deadlock)
     _deadlock_detector.start()
+    _scheduler._deadlock_detector = _deadlock_detector
 
     _engine.start()
 
@@ -268,29 +270,37 @@ def run_scenario(request: ScenarioRequest, user=Depends(require_role("control"))
     Ejecuta un escenario predefinido para demostrar un concepto de SO.
     
     Escenarios disponibles:
-    - mutex_demo: 3 vehículos normales compiten por la misma intersección
-    - priority_demo: 1 ambulancia + 2 normales → ambulancia gana por prioridad
-    - deadlock_demo: 2 vehículos con rutas que generan interbloqueo
+    - mutex_demo: 2 vehículos desde extremos opuestos compiten por la misma intersección central
+    - priority_demo: 1 ambulancia cruza horizontalmente, 2 normales bloqueados esperando
+    - deadlock_demo: 2 vehículos en rutas opuestas que se cruzan, causando contención intensa
     """
     engine = get_engine()
     scenario = request.scenario
     vehicles_added = []
 
     if scenario == "mutex_demo":
-        for i in range(3):
-            vid = f"mutex-car-{i+1}"
-            engine.add_vehicle(vid, "intersection_1_1", Priority.NORMAL)
-            vehicles_added.append(vid)
+        engine.add_vehicle("mutex-A1", "intersection_0_0", Priority.NORMAL,
+                          ["intersection_0_0", "intersection_0_1", "intersection_0_2", "intersection_1_2"])
+        engine.add_vehicle("mutex-A2", "intersection_0_0", Priority.NORMAL,
+                          ["intersection_0_0", "intersection_0_1", "intersection_0_2", "intersection_1_2"])
+        engine.add_vehicle("mutex-A3", "intersection_0_0", Priority.NORMAL,
+                          ["intersection_0_0", "intersection_0_1", "intersection_0_2", "intersection_1_2"])
+        vehicles_added = ["mutex-A1", "mutex-A2", "mutex-A3"]
 
     elif scenario == "priority_demo":
-        engine.add_vehicle("normal-1", "intersection_1_1", Priority.NORMAL)
-        engine.add_vehicle("normal-2", "intersection_1_1", Priority.NORMAL)
-        engine.add_vehicle("ambulancia-prio", "intersection_1_1", Priority.EMERGENCY)
-        vehicles_added = ["normal-1", "normal-2", "ambulancia-prio"]
+        engine.add_vehicle("ambulancia", "intersection_0_0", Priority.EMERGENCY,
+                          ["intersection_0_0", "intersection_0_1", "intersection_0_2", "intersection_1_2"])
+        engine.add_vehicle("normal-1", "intersection_0_0", Priority.NORMAL,
+                          ["intersection_0_0", "intersection_0_1", "intersection_0_2", "intersection_1_2"])
+        engine.add_vehicle("normal-2", "intersection_0_0", Priority.NORMAL,
+                          ["intersection_0_0", "intersection_0_1", "intersection_0_2", "intersection_1_2"])
+        vehicles_added = ["ambulancia", "normal-1", "normal-2"]
 
     elif scenario == "deadlock_demo":
-        engine.add_vehicle("deadlock-A", "intersection_0_0", Priority.NORMAL)
-        engine.add_vehicle("deadlock-B", "intersection_1_2", Priority.NORMAL)
+        engine.add_vehicle("deadlock-A", "intersection_0_0", Priority.NORMAL,
+                          ["intersection_0_0", "intersection_0_1", "intersection_1_1", "intersection_2_1"])
+        engine.add_vehicle("deadlock-B", "intersection_2_2", Priority.NORMAL,
+                          ["intersection_2_2", "intersection_2_1", "intersection_1_1", "intersection_0_1"])
         vehicles_added = ["deadlock-A", "deadlock-B"]
 
     else:
@@ -301,9 +311,9 @@ def run_scenario(request: ScenarioRequest, user=Depends(require_role("control"))
         "scenario": scenario,
         "vehicles_added": vehicles_added,
         "description": {
-            "mutex_demo": "Exclusión Mutua: 3 vehículos compiten por la misma intersección. Solo 1 pasa a la vez.",
-            "priority_demo": "Priority Scheduling: 1 ambulancia (prio=0) + 2 normales (prio=2). La ambulancia pasa primero.",
-            "deadlock_demo": "Detección de Deadlock: 2 vehículos con rutas que generan interbloqueo. Timeout >10s → rollback."
+            "mutex_demo": "Exclusión Mutua: 3 vehículos spawneados en (1,1). A1 y A2 van por la izquierda hacia (0,0), B va por la derecha hacia (2,2). Solo 1 pasa a la vez por cada intersección.",
+            "priority_demo": "Priority Scheduling: 1 ambulancia (prio=0) cruza horizontalmente. Los normales quedan en cola esperando.",
+            "deadlock_demo": "Detección de Deadlock: 2 vehículos en rutas opuestas que se cruzan en múltiples puntos. Timeout >10s → rollback."
         }.get(scenario, "")
     }
 
@@ -312,11 +322,11 @@ def run_scenario(request: ScenarioRequest, user=Depends(require_role("control"))
 def add_vehicle(request: AddVehicleRequest, user=Depends(require_role("control"))):
     """
     Agrega un vehículo a la simulación en ejecución.
+    Opcionalmente puede recibir una ruta predefinida (lista de intersecciones).
     Requiere rol 'control'.
     """
     engine = get_engine()
 
-    # Mapear string priority a Priority enum
     if request.priority == "EMERGENCY":
         p = Priority.EMERGENCY
     elif request.priority == "HIGH":
@@ -324,6 +334,6 @@ def add_vehicle(request: AddVehicleRequest, user=Depends(require_role("control")
     else:
         p = Priority.NORMAL
 
-    engine.add_vehicle(request.id, request.start_intersection, p)
+    engine.add_vehicle(request.id, request.start_intersection, p, request.route_path)
 
     return {"status": "vehicle_added", "vehicle_id": request.id}
