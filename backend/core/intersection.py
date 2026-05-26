@@ -8,10 +8,9 @@ class Intersection:
     Cada intersección es considerada un recurso único e independiente 
     por el cual los procesos (Vehículos) deben competir.
     """
-    def __init__(self, intersection_id: str):
+    def __init__(self, intersection_id: str, green_time: int = 10, red_time: int = 10):
         self.id = intersection_id
-        # El semáforo es el Recurso (Mutex) incrustado en este nodo.
-        self.light = TrafficLight(intersection_id)
+        self.light = TrafficLight(intersection_id, green_time, red_time)
 
     @property
     def state(self) -> str:

@@ -1,6 +1,29 @@
 import queue
 import threading
 import time
+from typing import Optional
+
+# Logger para movimientos de vehículos (diagnóstico Bug 3)
+_movement_log: list[dict] = []
+_log_lock = threading.Lock()
+
+def get_movement_log() -> list[dict]:
+    with _log_lock:
+        return list(_movement_log)
+
+def clear_movement_log():
+    with _log_lock:
+        _movement_log.clear()
+
+def log_vehicle_move(vehicle_id: str, from_id: str, to_id: str, tick: int, dispatch_seq: int):
+    with _log_lock:
+        _movement_log.append({
+            "vehicle_id": vehicle_id,
+            "from": from_id,
+            "to": to_id,
+            "tick": tick,
+            "seq": dispatch_seq
+        })
 
 class TrafficScheduler:
     """
@@ -24,6 +47,11 @@ class TrafficScheduler:
         # Monitor para proteger la creación y acceso seguro a las estructuras del Planificador
         self._lock = threading.Lock()
 
+        # Bug 3: Control de vehículos despachados este tick para evitar duplicados
+        self._dispatched_this_tick: set = set()
+        self._current_tick: int = 0
+        self._dispatch_seq: int = 0  # Para rastrear orden de despachos
+
     def enqueue(self, vehicle, intersection_id: str):
         """
         Encola un proceso en la cola de listos (Ready Queue) perteneciente a un recurso.
@@ -34,11 +62,11 @@ class TrafficScheduler:
             if vehicle.vehicle_id not in self._dispatch_events:
                 self._dispatch_events[vehicle.vehicle_id] = threading.Event()
 
-        # En sistemas operativos, si dos procesos tienen igual prioridad, se recurre 
-        # a FIFO / Round Robin temporal. Aquí incluimos time.time() para evitar choques
-        # en la PriorityQueue si hay prioridades empatadas, respetando el orden de llegada.
-        entry = (vehicle.priority, time.time(), vehicle)
+        entry = (vehicle.priority, time.time(), id(vehicle), vehicle)
         self._queues[intersection_id].put(entry)
+
+        if hasattr(self, '_deadlock_detector') and self._deadlock_detector:
+            self._deadlock_detector.register_vehicle(vehicle.vehicle_id)
 
     def dispatch_next(self, intersection_id: str):
         """
@@ -47,9 +75,22 @@ class TrafficScheduler:
         """
         if intersection_id in self._queues:
             try:
-                # get_nowait extrae al proceso siempre priorizando el de menor valor IntEnum.
-                _, _, vehicle = self._queues[intersection_id].get_nowait()
-                # Envía la señal (interrupción de software) para despertar al Vehículo
+                entry = self._queues[intersection_id].get_nowait()
+                priority, timestamp, vid, vehicle = entry
+
+                if vehicle.vehicle_id in self._dispatched_this_tick:
+                    
+                    self.enqueue(vehicle, intersection_id)
+                    return
+
+                self._dispatched_this_tick.add(vehicle.vehicle_id)
+                self._dispatch_seq += 1
+                vehicle._dispatched_at_tick = self._current_tick
+                vehicle._dispatch_seq = self._dispatch_seq
+
+                if hasattr(self, '_deadlock_detector') and self._deadlock_detector:
+                    self._deadlock_detector.unregister_vehicle(vehicle.vehicle_id)
+
                 self._dispatch_events[vehicle.vehicle_id].set()
             except queue.Empty:
                 pass
@@ -77,7 +118,7 @@ class TrafficScheduler:
                 while not q.empty():
                     try:
                         item = q.get_nowait()
-                        if item[2].vehicle_id != vehicle_id:
+                        if item[3].vehicle_id != vehicle_id:
                             remaining.append(item)
                     except queue.Empty:
                         break
@@ -113,4 +154,4 @@ class TrafficScheduler:
             # Re-encolar todo (inspección no destructiva)
             for item in items:
                 q.put(item)
-            return [item[2].vehicle_id for item in items]
+            return [item[3].vehicle_id for item in items]

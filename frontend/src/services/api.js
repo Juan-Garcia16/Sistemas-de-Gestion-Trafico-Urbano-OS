@@ -80,8 +80,8 @@ class ApiService {
     return this.request("GET", "/simulation/status");
   }
 
-  async addVehicle(id, route, priority) {
-    return this.request("POST", "/simulation/vehicle", { id, route, priority });
+  async addVehicle(id, startIntersection, priority) {
+    return this.request("POST", "/simulation/vehicle", { id, start_intersection: startIntersection, priority });
   }
 
   // Control

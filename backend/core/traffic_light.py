@@ -10,41 +10,40 @@ class TrafficLight:
     """
     def __init__(self, intersection_id: str, green_time: int = 10, red_time: int = 10):
         self.id = intersection_id
-        # Estados posibles: RED | GREEN | YELLOW | FAULT
         self.state = "RED"
         self.green_time = green_time
-        self.red_time = red_time  # Duración independiente de la fase roja del semáforo
+        self.red_time = red_time
         
-        # --- Concepto de SO: Semáforo Mutex ---
-        # Un Semáforo inicializado en 1 actúa como una cerradura de exclusión mutua (Mutex).
-        # Esto asegura que únicamente un vehículo (hilo) pueda ocupar el recurso 
-        # (intersección) en un momento dado, evitando una condición de carrera (choque).
         self.semaphore = threading.Semaphore(1)
-        
-        # --- Concepto de SO: Manejo de Interrupciones ---
-        # threading.Event se usa de forma análoga a una interrupción de hardware/software.
-        # Permite despertar o notificar inmediatamente a todos los procesos bloqueados
-        # de que ha ocurrido un fallo abrupto en el sistema.
         self.fault_event = threading.Event()
-        
-        # --- Concepto de SO: Monitor ---
-        # Un Lock interno para proteger estrictamente las variables de estado (ej. self.state)
-        # cuando hilos independientes (ej. manejador de interrupciones vs el motor de simulación)
-        # intentan leer o escribir sobre ellas.
         self._lock = threading.Lock()
+        
+        self._occupied_by: str | None = None
+        self._fault_blocked: list = []
+        self._was_faulty = False
+        self._force_release_event = threading.Event()
 
     def acquire(self, vehicle_id: str, timeout: float = 5.0) -> bool:
         """
         Un vehículo (hilo) intenta acceder al recurso compartido.
         Representa la primitiva P() o Wait() en la teoría de semáforos de Dijkstra.
         """
-        # El timeout actúa como un mecanismo preventivo nativo frente a interbloqueos (deadlocks).
-        # Si no logra entrar en el tiempo estipulado, retrocede.
+        with self._lock:
+            if self.state == "FAULT":
+                self._fault_blocked.append(vehicle_id)
+                return False
+        
         acquired = self.semaphore.acquire(timeout=timeout)
         if not acquired:
-            # Reportamos fallo de adquisición al no poder tomar la cerradura,
-            # previniendo que el proceso se quede colgado eternamente.
+            with self._lock:
+                if vehicle_id in self._fault_blocked:
+                    self._fault_blocked.remove(vehicle_id)
             return False
+        
+        with self._lock:
+            self._occupied_by = vehicle_id
+            if vehicle_id in self._fault_blocked:
+                self._fault_blocked.remove(vehicle_id)
         return True
 
     def release(self):
@@ -52,25 +51,49 @@ class TrafficLight:
         El vehículo sale de la intersección.
         Representa la primitiva V() o Signal() en la teoría de semáforos.
         """
-        self.semaphore.release()
+        with self._lock:
+            if self.state == "FAULT":
+                return
+            was_faulty = self._was_faulty
+            self._occupied_by = None
+            self._was_faulty = False
+        
+        if was_faulty:
+            # Si el recurso fue restaurado tras un fallo, restore() ya liberó el semáforo.
+            # Retornamos de inmediato para evitar liberar por duplicado.
+            return
+        
+        try:
+            self.semaphore.release()
+        except ValueError:
+            pass
 
     def trigger_fault(self):
         """
         Rutina para inyectar una interrupción en el sistema (ej. sensor dañado).
         """
-        with self._lock: # Uso de _lock para garantizar atomicidad de la escritura
+        with self._lock:
             self.state = "FAULT"
+            self._was_faulty = True
         
-        # Se envía la señal; interrumpe el flujo normal notificando el problema
         self.fault_event.set()
+        self._force_release_event.set()
 
     def restore(self):
-        """
-        Rutina de servicio de interrupción (ISR - Interrupt Service Routine) 
-        para reanudar la operativa normal.
-        """
         with self._lock:
-            self.state = "RED"
+            self.state = "GREEN"
+            self._was_faulty = True
+            self._occupied_by = None
         
-        # Restablece la bandera a nivel procesador/hilo
         self.fault_event.clear()
+        self._force_release_event.clear()
+        
+        try:
+            self.semaphore.release()
+        except ValueError:
+            pass
+
+    def get_blocked_vehicles(self) -> list:
+        """Retorna la lista de vehículos bloqueados tratando de adquirir durante FAULT."""
+        with self._lock:
+            return list(self._fault_blocked)

@@ -84,10 +84,14 @@ def update_timing(
 
 
 @router.post("/lights/{intersection_id}/fault")
-def trigger_fault(intersection_id: str, user=Depends(require_role("control"))):
+def trigger_fault(
+    intersection_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(require_role("control"))
+):
     """
-    Simula un fallo manual en un semáforo específico.
-    El semáforo pasará a estado FAULT y se recuperará automáticamente.
+    Simula un fallo manual en un semáforo específico (conmutación/toggle).
+    El semáforo pasará a estado FAULT si está normal, o se recuperará si ya está en fallo.
     Requiere rol 'control'.
     """
     engine = get_engine()
@@ -97,9 +101,29 @@ def trigger_fault(intersection_id: str, user=Depends(require_role("control"))):
         raise HTTPException(status_code=404, detail="Intersección no encontrada")
 
     intersection = engine.network.nodes[intersection_id]
-    intersection.light.trigger_fault()
+    
+    # Conmutar estado de fallo del semáforo
+    if intersection.light.state == "FAULT":
+        intersection.light.restore()
+        status = "fault_restored"
+        event_type = "RESTORE"
+    else:
+        intersection.light.trigger_fault()
+        status = "fault_triggered"
+        event_type = "FAULT"
 
-    return {"status": "fault_triggered", "intersection": intersection_id}
+    # Registrar el evento en el log de auditoría
+    log = EventLog(
+        timestamp=datetime.utcnow().isoformat(),
+        event_type=event_type,
+        intersection_id=intersection_id,
+        user_id=user.get("sub"),
+        details=f'{{"source": "manual_control", "action": "{status}"}}'
+    )
+    db.add(log)
+    db.commit()
+
+    return {"status": status, "intersection": intersection_id}
 
 
 @router.get("/lights")

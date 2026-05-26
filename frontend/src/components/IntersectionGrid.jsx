@@ -70,14 +70,13 @@ export function IntersectionGrid({ intersections, vehicles }) {
 
       {/* Vehicles layer (top) */}
       <div className="absolute pointer-events-none" style={{ left: padding / 2, top: padding / 2, zIndex: 10 }}>
-        {vehicles.map(v => (
+        {vehicles.filter(v => v.position).map(v => (
           <VehicleMarker
             key={v.id}
             id={v.id}
             status={v.status}
             priority={v.priority}
-            currentPosition={v.currentPosition}
-            route={v.route}
+            currentPosition={v.position}
             cellSize={CELL_SIZE}
           />
         ))}

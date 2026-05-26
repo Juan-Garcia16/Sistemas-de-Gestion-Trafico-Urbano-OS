@@ -1,0 +1,611 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    stringstyle=\color{red},
+    commentstyle=\color{green},
+    numbers=left,
+    numberstyle=\tiny,
+    stepnumber=1,
+    frame=single,
+    breaklines=true,
+    captionpos=b
+}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan
+}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\LARGE\bfseries INFORME DE PROYECTO: SISTEMAS OPERATIVOS\par}
+    \vspace{1.5cm}
+    
+    {\LARGE\bfseries Sistema de Gestión de Tráfico Urbano con Simulación de Procesos Concurrentes\par}
+    \vspace{2cm}
+    
+    \large
+    
+    \textbf{Integrantes:}\\
+    \vspace{0.3cm}
+    [Nombre 1]\\
+    [Nombre 2]\\
+    [Nombre 3]\\
+    \vspace{1.5cm}
+    
+    \textbf{Fecha:} 2024\\
+    \vspace{1.5cm}
+    
+    \textbf{Asignatura:} Sistemas Operativos\\
+    \textbf{Profesor:} [Nombre del profesor]\\
+    
+    \vspace{3cm}
+    
+    \textbf{Resumen:} Este proyecto implementa un sistema de simulación de tráfico urbano que demuestra conceptos fundamentales de sistemas operativos incluyendo planificación de procesos con prioridades, manejo de interrupciones, concurrencia con hilos y sincronización mediante semáforos y locks, todo bajo un esquema de control de acceso basado en roles.
+    
+    \vfill
+\end{titlepage}
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\section{1. INTRODUCCIÓN}
+
+El presente documento describe el desarrollo de un sistema de simulación de gestión de tráfico urbano implementado como una aplicación de escritorio con interfaz gráfica. El sistema modelaintersacciones de tráfico como recursos protegidos por semáforos, vehículos como procesos concurrentes ejecutándose en hilos independientes, y un algoritmo de planificación por prioridades que demuestra la exclusión mutua y la resolución de interbloqueos.
+
+La problemática abordada consiste en la necesidad de coordinar múltiples tareas concurrentes que compiten por recursos limitados (las intersecciones de una red de tráfico), aplicando conceptos fundamentales de sistemas operativos como planificación de procesos, sincronización, manejo de interrupciones y control de acceso.
+
+\subsection{1.1 Planteamiento del problema}
+
+En un sistema de tráfico urbano real, múltiples vehículos transitan simultáneamente por una red de intersecciones, cada una controlada por un semáforo. La gestión eficiente de este flujo requiere:
+
+\begin{itemize}
+    \item Coordinar el acceso a recursos compartidos (intersecciones) entre múltiples procesos concurrentes (vehículos)
+    \item Evitar condiciones de carrera donde múltiples vehículos intentan cruzar la misma intersección simultáneamente
+    \item Prevenir y resolver interbloqueos cuando vehículos quedan esperando recursos retenidos por otros
+    \item Manejar interrupciones (fallas de semáforos) que alteran el flujo normal de ejecución
+    \item Establecer prioridades para vehículos de emergencia (ambulancias, bomberos)
+    \item Controlar el acceso a las funciones del sistema según roles de usuario (visualización vs. control)
+\end{itemize}
+
+\subsection{1.2 Objetivo General}
+
+Desarrollar un sistema funcional que implemente algoritmos de planificación, manejo de interrupciones y concurrencia bajo un esquema de permisos, demostrando de manera práctica la aplicación de conceptos fundamentales de sistemas operativos en un dominio de simulación de tráfico urbano.
+
+\subsection{1.3 Objetivos específicos}
+
+\begin{enumerate}
+    \item Implementar un algoritmo de planificación por prioridades que gestione el orden de ejecución de vehículos en cada intersección de la red de tráfico.
+    \item Simular el tratamiento de interrupciones de hardware/software mediante un manejador de fallas que inyecta errores en semáforos y permite su recuperación automática.
+    \item Implementar hilos (threads) para representar cada vehículo como un proceso independiente que compite por recursos compartidos.
+    \item Diseñar e implementar un esquema de permisos y dominios basado en roles (RBAC) que Restringa acciones según el nivel de autorización del usuario.
+    \item Construir un macroalgoritmo que describa el funcionamiento global del sistema de simulación.
+\end{enumerate}
+
+\subsection{1.4 Justificación}
+
+La implementación de este sistema justifica la aplicación práctica de conceptos de sistemas operativos porque:
+
+\begin{itemize}
+    \item \textbf{Interbloqueos (Deadlocks):} La competencia por múltiples recursos (vehículos esperando en intersecciones que otros vehículos mantienen bloqueadas) demuestra el problema de interbloqueo y los algoritmos de detección/resolución.
+    \item \textbf{Context Switching:} El cambio entre vehículos que esperan en colas de planificación simula el cambio de contexto del CPU cuando un proceso bloqueado cede el control a otro.
+    \item \textbf{Race Conditions:} Sin los semáforos apropiados, múltiples vehículos intentarían adquirir la misma intersección simultáneamente, generando condiciones de carrera.
+    \item \textbf{Planificación:} El algoritmo de planificación por prioridades demuestra cómo el sistema operativo decide qué proceso ejecutar cuando hay múltiples procesos en espera.
+    \item \textbf{Sincronización:} Los locks y eventos de sincronización garantizan que solo un vehículo a la vez pueda cruzar una intersección, igual quemutexes protegen secciones críticas en sistemas operativos.
+\end{itemize}
+
+\newpage
+
+\section{2. MARCO REFERENCIAL}
+
+\subsection{Planificación de procesos}
+
+El sistema implementa un algoritmo de planificación por prioridades predefinidas (Fixed Priority Scheduling). Este algoritmo asigna a cada proceso (vehículo) un nivel de prioridad estático que determina su orden de ejecución cuando compite por recursos.
+
+\textbf{Definición:} La planificación por prioridades asigna a cada proceso un valor de prioridad que determina su posición en la cola de espera. Los procesos con mayor prioridad (número menor) son ejecutados antes que los de menor prioridad. Cuando dos procesos tienen la misma prioridad, se utiliza FIFO (First In, First Out) como criterio de desempate.
+
+En el contexto del sistema, los niveles de prioridad son:
+\begin{itemize}
+    \item \textbf{P0 (Emergencia):} Vehículos de emergencia (ambulancias, bomberos) con prioridad máxima
+    \item \textbf{P1 (Alta):} Vehículos VIP o prioritarios
+    \item \textbf{P2 (Normal):} Vehículos regulares
+\end{itemize}
+
+\subsection{Hilos y Concurrencia}
+
+El sistema utiliza el módulo \texttt{threading} de Python para crear y gestionar hilos que representan vehículos individuales. Cada vehículo es una instancia de la clase \texttt{Vehicle} que hereda de \texttt{threading.Thread}, ejecutándose como un proceso ligero independiente.
+
+\textbf{Concepto de hilos:} Un hilo (thread) es la unidad más pequeña de procesamiento que puede ser planificada por el sistema operativo. Los hilos de un mismo proceso comparten el espacio de memoria y recursos, pero cada uno tiene su propio contador de programa y pila de ejecución.
+
+\textbf{Mecanismos de sincronización utilizados:}
+\begin{itemize}
+    \item \textbf{Semáforos (Semaphore):} Utilizados para controlar el acceso a las intersecciones. Un semáforo binario (valor 1) actúa como mutex asegurando que solo un vehículo pueda cruzar a la vez.
+    \item \textbf{Locks (threading.Lock):} Protegen el acceso a estructuras de datos compartidas como el estado del semáforo y las colas de espera.
+    \item \textbf{Eventos (threading.Event):} Permiten la comunicación entre hilos, específicamente para la señalización de dispatching de vehículos desde el planificador hacia los hilos espera.
+\end{itemize}
+
+\subsection{Seguridad y Control de Acceso}
+
+El sistema implementa un modelo de control de acceso basado en roles (RBAC - Role-Based Access Control) donde cada usuario recibe un rol que determina sus permisos.
+
+\textbf{Definición de dominios de protección:} Un dominio de protección define qué operaciones puede realizar un sujeto (usuario) sobre qué objetos (recursos) del sistema. En este proyecto, los roles definen dominios separados:
+
+\begin{itemize}
+    \item \textbf{Rol Viewer:} Dominio de solo lectura. Los usuarios con este rol pueden visualizar el estado de la simulación, métricas y logs, pero no pueden modificar parámetros ni controlar la simulación.
+    \item \textbf{Rol Control:} Dominio completo. Los usuarios con este rol pueden iniciar/detener la simulación, agregar vehículos, modificar tiempos de semáforos, e inyectar fallas.
+\end{itemize}
+
+La autenticación se realiza mediante tokens JWT (JSON Web Tokens) que contienen la información del usuario y su rol, firmados criptográficamente con HMAC-SHA256.
+
+\newpage
+
+\section{3. METODOLOGÍA}
+
+El desarrollo del proyecto siguió una metodología estructurada en cuatro fases:
+
+\subsection{Fase 1: Análisis de requerimientos}
+\begin{itemize}
+    \item Estudio del documento de requerimientos de la asignatura
+    \item Identificación de los conceptos de sistemas operativos a implementar
+    \item Mapeo de conceptos de SO al dominio de simulación de tráfico
+    \item Definición de la arquitectura del sistema
+\end{itemize}
+
+\subsection{Fase 2: Diseño del macroalgoritmo}
+\begin{itemize}
+    \item Diseño del grafo de recursos (red de intersecciones)
+    \item Definición de las estructuras de datos para colas de planificación
+    \item Especificación de los mecanismos de sincronización
+    \item Diseño del flujo de control del motor de simulación (kernel tick)
+\end{itemize}
+
+\subsection{Fase 3: Codificación}
+\begin{itemize}
+    \item Implementación del backend con FastAPI y Python
+    \item Creación de las clases core: Vehicle, TrafficLight, TrafficScheduler
+    \item Implementación del motor de simulación (SimulationEngine)
+    \item Desarrollo del manejador de interrupciones (FaultHandler)
+    \item Implementación del detector de interbloqueos (DeadlockDetector)
+    \item Creación del sistema de autenticación JWT con RBAC
+    \item Implementación del frontend con React y Vite
+    \item Desarrollo de la interfaz gráfica con conexiones WebSocket en tiempo real
+\end{itemize}
+
+\subsection{Fase 4: Pruebas de estrés}
+\begin{itemize}
+    \item Verificación de funcionamiento del algoritmo de planificación
+    \item Prueba de escenarios de interbloqueo y recuperación
+    \item Prueba de inyección de fallas y recuperación
+    \item Verificación del esquema de permisos
+    \item Pruebas de concurrencia con múltiples vehículos simultáneos
+\end{itemize}
+
+\newpage
+
+\section{4. ESPECIFICACIONES TÉCNICAS}
+
+\subsection{Tecnologías utilizadas}
+
+\begin{itemize}
+    \item \textbf{Lenguaje Backend:} Python 3.x
+    \item \textbf{Framework Backend:} FastAPI (API REST y WebSocket)
+    \item \textbf{Lenguaje Frontend:} JavaScript (ES6+)
+    \item \textbf{Framework Frontend:} React 19.2.5
+    \item \textbf{Herramienta de construcción:} Vite 8.0.10
+    \item \textbf{Bases de datos:} SQLite (persistenciay logs de eventos)
+    \item \textbf{Autenticación:} JWT (JSON Web Tokens) con bcrypt
+    \item \textbf{Concurrencia:} Python threading (hilos, semáforos, locks, eventos)
+    \item \textbf{Estilos:} Tailwind CSS v4
+\end{itemize}
+
+\subsection{Funcionalidades}
+
+El sistema proporciona las siguientes funcionalidades:
+
+\begin{enumerate}
+    \item \textbf{Simulación de tráfico en tiempo real}
+    \begin{itemize}
+        \item Red de 3x3 intersecciones con semáforos
+        \item Vehículos que transitan por la red cambiando de intersección en intersección
+        \item Estados de vehículos: WAITING, MOVING, DONE
+    \end{itemize}
+    
+    \item \textbf{Planificación por prioridades}
+    \begin{itemize}
+        \item Tres niveles de prioridad: EMERGENCY (P0), HIGH (P1), NORMAL (P2)
+        \item Colas de prioridad por intersección
+        \item Despacho FIFO para vehículos de igual prioridad
+    \end{itemize}
+    
+    \item \textbf{Manejo de interrupciones (fallas)}
+    \begin{itemize}
+        \item Inyección automática de fallas cada 15-30 segundos
+        \item Fallas auto-recuperables después de 5 segundos
+        \item Notificación en tiempo real de eventos de falla
+    \end{itemize}
+    
+    \item \textbf{Detección y resolución de interbloqueos}
+    \begin{itemize}
+        \item Timeout de 10 segundos para vehículos esperando
+        \item Remoción automática de vehículos en deadlock
+    \end{itemize}
+    
+    \item \textbf{Autenticación y control de acceso}
+    \begin{itemize}
+        \item Registro y login de usuarios
+        \item Tokens JWT con expiración
+        \item Roles: viewer (solo lectura) y control (completo)
+    \end{itemize}
+    
+    \item \textbf{Visualización en tiempo real}
+    \begin{itemize}
+        \item Panel gráfico con cuadrícula de intersecciones
+        \item Indicadores de estado de semáforos (ROJO, AMARILLO, VERDE, FALLA)
+        \item Vehículos marcados por prioridad (colores diferenciados)
+        \item Métricas de mutex y tabla de procesos
+    \end{itemize}
+    
+    \item \textbf{Escenarios de demostración}
+    \begin{itemize}
+        \item Demostración de mutex: múltiples vehículos hacia una intersección
+        \item Demostración de prioridades: vehículo P0 supera a P2
+        \item Demostración de deadlock: dos vehículos bloqueados mutuamente
+    \end{itemize}
+\end{enumerate}
+
+\newpage
+
+\section{5. ARQUITECTURA E IMPLEMENTACIÓN}
+
+La arquitectura del sistema sigue un patrón cliente-servidor con comunicación en tiempo real mediante WebSocket. El servidor implementa la lógica de simulación usando hilos de Python, mientras que el cliente proporciona una interfaz visual moderna.
+
+\subsection{5.1 Macroalgoritmo}
+
+El funcionamiento del sistema se describe mediante el siguiente macroalgoritmo:
+
+\begin{lstlisting}[language=python, caption=Motor de simulación - Kernel Tick Loop]
+ALGORITMO: Motor de Simulación (SimulationEngine)
+ENTRADA: Ninguna
+SALIDA: Actualización continua del estado de la simulación
+
+INICIALIZAR:
+    Crear red de 3x3 intersecciones (IntersectionNetwork)
+    Crear planificador con colas de prioridad (TrafficScheduler)
+    Iniciar manejador de fallas (FaultHandler)
+    Iniciar detector de interbloqueos (DeadlockDetector)
+
+EJECUTAR_MIENTRAS(simulation_running):
+    
+    # Incrementar contador de ticks (reloj del sistema)
+    tick_count += 1
+    
+    PARA CADA intersección EN red:
+        # Actualizar estado del semáforo (ciclo RED->GREEN->YELLOW->RED)
+        ACTUALIZAR_SEMAFORO(interseccion)
+        
+        # Despachar vehículos desde la cola de prioridad
+        SI cola_interseccion NO ESTÁ VACÍA:
+            vehiculo = DESPACHAR_PRIORIDAD(cola_interseccion)
+            SIGNAL_EVENT(vehiculo.dispatch_event)
+    
+    PARA CADA vehiculo ACTIVO EN red:
+        SI vehiculo.estado == WAITING:
+            # El vehículo está bloqueado en el planificador
+            PASS (espera event)
+        
+        SI vehiculo.estado == READY:
+            # Intentar adquirir el semáforo de destino
+            SI ACQUIRE_SEMAPHORE(vehiculo, destino) == ÉXITO:
+                vehiculo.estado = MOVING
+                REGISTRAR_PASO(vehiculo)
+            SI NO:
+                PASS (semáforo ocupado, reintentar próximo tick)
+        
+        SI vehiculo.estado == MOVING:
+            # Cruzar la intersección
+            REGISTRAR_POSICIÓN(vehiculo, destino)
+            RELEASE_SEMAPHORE(vehiculo, destino)
+            vehiculo.estado = WAITING
+        
+        SI vehiculo.visitas >= MAX_LIFETIME:
+            vehiculo.estado = DONE
+    
+    # Verificar interbloqueos
+    PARA CADA vehiculo EN cola:
+        SI tiempo_espera > MAX_WAIT_TIME:
+            REMOVER_VEHICULO(vehiculo) # Resolver deadlock
+    
+    # Difundir estado a clientes WebSocket
+    BROADCAST_ESTADO(intersecciones, vehiculos, alertas)
+    
+    ESPERAR(1 segundo) # Tick del kernel
+
+TERMINAR:
+    DETENER_FAULT_HANDLER
+    DETENER_DEADLOCK_DETECTOR
+    CERRAR_HILOS_VEHÍCULOS
+\end{lstlisting}
+
+\subsection{Planificación de Procesos}
+
+El algoritmo de planificación implementado utiliza colas de prioridad por recurso:
+
+\begin{lstlisting}[language=python, caption=Planificador por Prioridades]
+ALGORITMO: TrafficScheduler.enqueue(vehiculo, interseccion_id)
+ENTRADA: vehiculo, interseccion_id
+SALIDA: Vehículo agregado a la cola de prioridad
+
+    entrada = (prioridad, timestamp, id(vehiculo), vehiculo)
+    cola[interseccion_id].put(entrada)
+    registrar_timestamp(vehiculo.id)
+\end{lstlisting}
+
+\begin{lstlisting}[language=python, caption=Dispatch de Prioridad]
+ALGORITMO: TrafficScheduler.dispatch_next(interseccion_id)
+ENTRADA: interseccion_id
+SALIDA: Vehículo despachado o None
+
+    SI dispatch_this_tick contiene interseccion_id:
+        RETORNAR None  # Ya se despachó este tick
+    
+    SI cola[interseccion_id] ESTÁ VACÍA:
+        RETORNAR None
+    
+    entrada = cola[interseccion_id].get()  # Obtener mayor prioridad
+    prioridad, timestamp, _, vehiculo = entrada
+    
+    marca_despachado(interseccion_id)
+    vehiculo.marcar_despachado()
+    vehiculo.dispatch_event.set()  # Señalar al vehículo
+    
+    RETORNAR vehiculo
+\end{lstlisting}
+
+\subsection{Manejo de Interrupciones}
+
+\begin{lstlisting}[language=python, caption=Manejador de Fallas]
+ALGORITMO: FaultHandler (Hilo Daemon)
+ENTRADA: Ninguna
+SALIDA: Inyección periódica de fallas en semáforos
+
+EJECUTAR_MIENTRAS running:
+    intervalo =.uniform(FAULT_MIN, FAULT_MAX)  # 15-30 segundos
+    ESPERAR(intervalo)
+    
+    # Seleccionar intersección aleatoria
+    interseccion = SELECCIONAR_ALEATORIO(nodos_red)
+    
+    # Inyectar falla (interrupción)
+    interseccion.light.trigger_fault()
+    BROADCAST_FAULT(interseccion.id)
+    
+    # Periodo de recuperación
+    ESPERAR(FAULT_RECOVERY_TIME)  # 5 segundos
+    
+    # Recuperar automáticamente
+    interseccion.light.restore()
+    BROADCAST_RESTORE(interseccion.id)
+\end{lstlisting}
+
+\subsection{Hilos y Concurrencia}
+
+\begin{lstlisting}[language=python, caption=Vehículo como Hilo]
+ALGORITMO: Vehicle.run() - Ciclo de vida del vehículo
+ENTRADA: Ninguna
+SALIDA: Ejecución hasta completación o deadlock
+
+    inicializar_eventos()
+    visitado = 0
+    
+    MIENTRAS visitado < MAX_LIFETIME:
+        # Seleccionar siguiente intersección
+        siguiente = SELECCIONAR_VECINO_ALEATORIO(interseccion_actual)
+        
+        # Encolar para el recurso
+        planificador.enqueue(self, siguiente)
+        
+        # Esperar dispatch (bloqueo sin CPU burn)
+        planificador.wait_for_dispatch(self.vehicle_id)
+        
+        # Intentar adquirir semáforo
+        tiempo_inicio = ahora()
+        MIENTRAS NO adquirido:
+            SI ahora() - tiempo_inicio > TIMEOUT:
+                # Abortar por deadlock potencial
+                SALIR
+            adquirido = luz.acquire(self.vehicle_id, timeout=0.5)
+        
+        SI adquirido:
+            cruzar_interseccion()
+            luz.release()
+            visitado += 1
+            intersección_actual = siguiente
+    
+    self.estado = DONE
+\end{lstlisting}
+
+\subsection{Modelo de Permisos y Dominios}
+
+\begin{lstlisting}[python, caption=Middleware de Autorización]
+ALGORITMO: require_role(rol_requerido)
+ENTRADA: rol_requerido (ej: "control")
+SALIDA: Usuario autenticado con rol válido o HTTP 403
+
+    obtener_token_header()
+    validar_token_jwt()
+    
+    SI token.role == rol_requerido:
+        RETORNAR usuario
+    SI NO:
+        LANZAR HTTPException(403, "Permiso denegado")
+\end{lstlisting}
+
+\subsection{Diagrama de Arquitectura}
+
+\begin{figure}[htbp]
+\centering
+\begin{verbatim}
++-------------------+      HTTP/REST + WS      +-------------------+
+|                   | <------------------->   |                   |
+|   Frontend        |                          |   Backend         |
+|   (React/Vite)   |                          |   (FastAPI)       |
+|                   |                          |                   |
+| - IntersectionGrid|                          | - SimulationEngine|
+| - MetricsPanel   |                          | - TrafficScheduler|
+| - ControlPanel   |                          | - FaultHandler    |
+| - LoginForm      |                          | - DeadlockDetector|
++-------------------+                          +-------------------+
+                                                            |
+                         +-----------------------------------+
+                         |
+                         v
+                  +--------------------+
+                  |   Core Modules     |
+                  |                    |
+                  | - Vehicle (Thread) |
+                  | - TrafficLight    |
+                  |   (Semaphore)     |
+                  | - Intersection     |
+                  |   (Resource)      |
+                  +--------------------+
+                         |
+                         v
+                  +--------------------+
+                  |   Simulation       |
+                  |   (Kernel Tick)    |
+                  | - Engine._loop()   |
+                  | - Network (RAG)   |
+                  +--------------------+
+                         |
+                         v
+                  +--------------------+
+                  |   Auth (RBAC)      |
+                  | - JWT Handler      |
+                  | - Role Middleware  |
+                  +--------------------+
+\end{verbatim}
+\caption{Arquitectura del Sistema}
+\end{figure}
+
+\subsection{Tabla de Conceptos SO vs Implementación}
+
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Concepto de Sistemas Operativos} & \textbf{Implementación en el Proyecto} \\
+\hline
+Proceso / Hilo de ejecución & \texttt{Vehicle(threading.Thread)} \\
+\hline
+Planificador de CPU & \texttt{TrafficScheduler} con \texttt{PriorityQueue} \\
+\hline
+Semáforo / Mutex & \texttt{TrafficLight.semaphore} (binary) \\
+\hline
+Lock de sección crítica & \texttt{threading.Lock} en \texttt{TrafficLight} \\
+\hline
+Evento de señalización & \texttt{threading.Event} para dispatch \\
+\hline
+Reloj del sistema / Tick & \texttt{SimulationEngine._loop()} cada 1s \\
+\hline
+Interrupción de hardware & \texttt{FaultHandler} inyecta fallas \\
+\hline
+Detector de deadlock & \texttt{DeadlockDetector} con timeout \\
+\hline
+Cola de listos & \texttt{scheduler.\_queues[interseccion_id]} \\
+\hline
+Tabla de procesos & \texttt{engine.active_vehicles} \\
+\hline
+Grafo de asignación de recursos & \texttt{IntersectionNetwork} \\
+\hline
+Autenticación & Tokens JWT + bcrypt \\
+\hline
+Autorización / RBAC & Roles \texttt{viewer} y \texttt{control} \\
+\hline
+\end{tabular}
+\end{center}
+
+\newpage
+
+\section{6. EVIDENCIAS Y CONCLUSIONES}
+
+\subsection{Evidencias de funcionamiento}
+
+\begin{figure}[htbp]
+\centering
+\fbox{\includegraphics[width=0.8\textwidth,height=0.5\textheight]{placeholder.png}}
+\caption{Vista principal del sistema con cuadrícula de intersecciones}
+\end{figure}
+
+La implementación demuestra:
+
+\begin{enumerate}
+    \item \textbf{Vehículos concurrentes:} Múltiples vehículos (hilos) ejecutándose simultáneamente, cada uno con su propio estado y ciclo de vida.
+    
+    \item \textbf{Planificación por prioridades:} Al agregar un vehículo P0 (emergencia), este es despachado antes que vehículos P2 (normal) en espera.
+    
+    \item \textbf{Exclusión mutua:} Un vehículo que cruza una intersección bloquea el semáforo para otros hasta completar su paso.
+    
+    \item \textbf{Interrupciones de fallas:} El FaultHandler inyecta fallas aleatorias que se muestran en la interfaz y se recuperan automáticamente.
+    
+    \item \textbf{Detección de interbloqueos:} Vehículos que esperan más de 10 segundos son removidos automáticamente.
+    
+    \item \textbf{Control de acceso:} Usuarios con rol \texttt{viewer} no pueden ver el panel de control; usuarios con rol \texttt{control} tienen acceso completo.
+\end{enumerate}
+
+\subsection{Reflexión sobre el aprendizaje}
+
+El desarrollo de este proyecto permitió aplicar y consolidar los siguientes conceptos de sistemas operativos:
+
+\begin{itemize}
+    \item \textbf{Concurrencia real:} La implementación de vehículos como hilos demostró en la práctica cómo múltiples procesos comparten recursos y se sincronizan.
+    
+    \item \textbf{Sincronización con semáforos:} El uso de \texttt{threading.Semaphore} para proteger el acceso a intersecciones mostró cómo los sistemas operativos resuelven el problema de la sección crítica.
+    
+    \item \textbf{Planificación:} El algoritmo de prioridades evidenció cómo el sistema operativo decide qué proceso ejecutar cuando hay competencia, incluyendo la problemática de la inanición (starvation) de procesos de baja prioridad.
+    
+    \item \textbf{Interrupciones:} La simulación de fallas mediante el FaultHandler demostró cómo los sistemas operativos deben manejar eventos asíncronos que alteran el flujo normal de ejecución.
+    
+    \item \textbf{Interbloqueos:} El DeadlockDetector y su timeout de 10 segundos mostraron una estrategia de resolución donde el sistema operativo \"mata\" un proceso bloqueado para romper el ciclo de espera circular.
+    
+    \item \textbf{Seguridad:} El esquema RBAC con JWT demostró cómo los sistemas operativos implementan protección de recursos mediante dominios y permisos.
+\end{itemize}
+
+El proyecto successfully mapped abstract operating system concepts to a tangible, interactive simulation, making theoretical knowledge concrete through practical implementation.
+
+\newpage
+
+\section{7. REFERENCIAS}
+
+\begin{enumerate}
+    \item Silberschatz, A., Galvin, P. B., y Gagne, G. \textit{Operating System Concepts}. 10th Edition. Wiley, 2018.
+    
+    \item Python Software Foundation. \textit{Python Standard Library - threading module}. Disponible en: \url{https://docs.python.org/3/library/threading.html}
+    
+    \item FastAPI. \textit{FastAPI Documentation}. Disponible en: \url{https://fastapi.tiangolo.com/}
+    
+    \item React. \textit{React Documentation}. Disponible en: \url{https://react.dev/}
+    
+    \item JOSE. \textit{Python JOSE Library}. Disponible en: \url{https://python-jose.readthedocs.io/}
+    
+    \item Tanenbaum, A. S. y Bos, H. \textit{Modern Operating Systems}. 4th Edition. Pearson, 2014.
+    
+    \item Stallings, W. \textit{Operating Systems: Internals and Design Principles}. 9th Edition. Pearson, 2017.
+\end{enumerate}
+
+\end{document}

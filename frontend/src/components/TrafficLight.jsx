@@ -1,5 +1,5 @@
 export function TrafficLight({ id, state, position, cellSize = 80 }) {
-  const scale = cellSize / 80;
+  // Ajustar la proporción para que el semáforo sea visible e imponente en el mapa
   const lightColors = {
     RED: "#EF4444",
     GREEN: "#22C55E",
@@ -11,52 +11,71 @@ export function TrafficLight({ id, state, position, cellSize = 80 }) {
 
   const lightStyle = (color) => ({
     backgroundColor: isFault ? "#6B7280" : lightColors[color],
-    opacity: isFault ? 0.5 : isActive(color) ? 1 : 0.15,
-    boxShadow: isActive(color) && !isFault ? `0 0 ${12 * scale}px ${lightColors[color]}` : "none"
+    opacity: isFault ? 0.35 : isActive(color) ? 1 : 0.12,
+    boxShadow: isActive(color) && !isFault ? `0 0 20px 4px ${lightColors[color]}, inset 0 0 8px rgba(255,255,255,0.4)` : "none"
   });
+
+  // Coordenadas legibles
+  const parts = id.split("_");
+  const label = `[${parts[1]},${parts[2]}]`;
 
   return (
     <div
-      className="absolute flex flex-col items-center"
-      style={{ left: position.x * cellSize, top: position.y * cellSize }}
+      className="absolute flex flex-col items-center select-none"
+      style={{
+        left: position.x * cellSize + 50,
+        top: position.y * cellSize + 20,
+        transform: "translate(-25%, -25%)"
+      }}
     >
-      {/* Housing */}
-      <div className={`bg-gray-800 rounded-lg border border-gray-600 shadow-lg ${
-        isFault ? "traffic-light-fault" : ""
-      }`}
-        style={{ padding: `${1.5 * scale}px` }}
-      >
+      {/* Housing (Caja del Semáforo) */}
+      <div className={`bg-gray-900 border-2 border-gray-700/60 rounded-xl shadow-2xl p-1.5 flex flex-col gap-1.5 relative ${isFault ? "traffic-light-fault" : ""
+        }`}>
+        {/* Luz Roja */}
         <div
-          className={`rounded-full mb-1 ${isActive("RED") ? "traffic-light-active" : ""}`}
+          className={`rounded-full transition-all duration-300 ${isActive("RED") ? "traffic-light-active" : ""}`}
           style={{
             ...lightStyle("RED"),
-            width: `${4 * scale}px`,
-            height: `${4 * scale}px`
+            width: "8px",
+            height: "8px",
+            border: "1px solid rgba(0,0,0,0.5)"
           }}
+          title="Fase: Alto"
         />
+        {/* Luz Amarilla */}
         <div
-          className={`rounded-full mb-1 ${isActive("YELLOW") ? "traffic-light-active" : ""}`}
+          className={`rounded-full transition-all duration-300 ${isActive("YELLOW") ? "traffic-light-active" : ""}`}
           style={{
             ...lightStyle("YELLOW"),
-            width: `${4 * scale}px`,
-            height: `${4 * scale}px`
+            width: "8px",
+            height: "8px",
+            border: "1px solid rgba(0,0,0,0.5)"
           }}
+          title="Fase: Transición"
         />
+        {/* Luz Verde */}
         <div
-          className={`rounded-full ${isActive("GREEN") ? "traffic-light-active" : ""}`}
+          className={`rounded-full transition-all duration-300 ${isActive("GREEN") ? "traffic-light-active" : ""}`}
           style={{
             ...lightStyle("GREEN"),
-            width: `${4 * scale}px`,
-            height: `${4 * scale}px`
+            width: "8px",
+            height: "8px",
+            border: "1px solid rgba(0,0,0,0.5)"
           }}
+          title="Fase: Marcha"
         />
       </div>
-      {/* Pole */}
-      <div style={{ width: `${1.5 * scale}px`, height: `${5 * scale}px` }} className="bg-gray-600" />
-      {/* Base */}
-      <div style={{ width: `${3 * scale}px`, height: `${1 * scale}px` }} className="bg-gray-500 rounded" />
-      {/* Label */}
-      <span className="text-xs text-gray-400 mt-1">{id}</span>
+
+      {/* Poste del semáforo con degradado metálico */}
+      <div className="w-1.5 h-3 bg-gradient-to-r from-gray-700 via-gray-600 to-gray-800 shadow" />
+
+      {/* Base de soporte */}
+      <div className="w-4 h-0.5 bg-gray-700 rounded shadow" />
+
+      {/* Etiqueta de la Intersección (Coordenadas) */}
+      <span className="text-[10px] font-mono font-bold text-gray-400 bg-gray-950/70 border border-gray-800/80 px-1 rounded shadow-sm mt-1 select-none pointer-events-none">
+        {label}
+      </span>
     </div>
   );
 }
