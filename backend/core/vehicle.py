@@ -49,17 +49,11 @@ class Vehicle(threading.Thread):
             if self._waiting_for_fault_clear and self.queued_at:
                 dest_light = self.network.nodes[self.queued_at].light
                 if dest_light.state == "FAULT":
-                    
                     self.scheduler.enqueue(self, self.queued_at)
                     time.sleep(0.05)
                     continue
                 
                 self._waiting_for_fault_clear = False
-
-            if self._held_light is not None:
-                
-                self.network.nodes[self._held_light].light.release()
-                self._held_light = None
 
             neighbors = self.network.get_neighbors(self.current_intersection)
 
@@ -85,7 +79,6 @@ class Vehicle(threading.Thread):
 
             if not acquired:
                 if dest_light.state == "FAULT":
-                    
                     self.status = "WAITING"
                     self._dispatched_this_tick = False
                     self._waiting_for_fault_clear = True
@@ -100,7 +93,9 @@ class Vehicle(threading.Thread):
                 self.scheduler.enqueue(self, self.current_intersection)
                 continue
 
-            
+            if self._held_light is not None:
+                self.network.nodes[self._held_light].light.release()
+                self._held_light = None
 
             self._held_light = next_id
 
@@ -126,7 +121,6 @@ class Vehicle(threading.Thread):
             log_vehicle_move(self.vehicle_id, prev_inter, next_id, self._dispatched_at_tick, self._dispatch_seq)
 
             if self.route_path and self.route_index >= len(self.route_path) - 1:
-                
                 break
 
         if self._held_light is not None:
